@@ -13,5 +13,6 @@ router.use("/coupons", require("./coupon.route"));
 router.use("/orders", require("./order.route"));
 router.use("/wishlist", require("./wishlist.route"));
 router.use("/payments", require("./payment.route"));
+router.use("/designs", require("./design.route"));
 
 module.exports = router;
