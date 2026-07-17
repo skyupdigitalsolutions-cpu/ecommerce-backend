@@ -5,6 +5,14 @@ const { getRazorpay } = require("../config/razorpay");
 const { PAYMENT_STATUS, ORDER_STATUS } = require("../constants");
 const { finalizeOrder } = require("./order.controller");
 
+// Razorpay SDK errors put the useful text in error.error.description and often
+// have no top-level .message — so res.json({ message: error.message }) would
+// serialise to {}. This pulls out the most descriptive string available.
+const gatewayMessage = (error) =>
+  error?.error?.description ||
+  error?.message ||
+  "Payment gateway error";
+
 // Constant-time string compare, so signature checks don't leak timing info.
 const safeEqual = (a, b) => {
   const ba = Buffer.from(a || "", "utf8");
@@ -54,7 +62,8 @@ const createRazorpayOrder = async (req, res) => {
       orderId: order._id,
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("[payments] create-order failed:", error?.error || error);
+    res.status(400).json({ message: gatewayMessage(error) });
   }
 };
 
@@ -181,7 +190,8 @@ const refund = async (req, res) => {
 
     res.status(200).json({ message: "Refund initiated", order });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("[payments] refund failed:", error?.error || error);
+    res.status(400).json({ message: gatewayMessage(error) });
   }
 };
 
