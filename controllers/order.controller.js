@@ -17,6 +17,7 @@ const createOrder = async (req, res) => {
 
     const cart = await Cart.findOne({ user: req.user._id })
       .populate("items.product")
+      .populate("items.design", "name thumbnail")
       .populate("coupon");
 
     if (!cart || cart.items.length === 0) {
@@ -31,6 +32,12 @@ const createOrder = async (req, res) => {
           .status(400)
           .json({ message: `Not enough stock for ${item.product.name}` });
       }
+      // Customizable products must carry a design (enforced at add-time too).
+      if (item.product.customizable && !item.design) {
+        return res
+          .status(400)
+          .json({ message: `${item.product.name} requires a design` });
+      }
     }
 
     const totals = computeTotals(items, cart.coupon);
@@ -42,6 +49,8 @@ const createOrder = async (req, res) => {
       price: sellingPrice(item.product),
       quantity: item.quantity,
       image: item.product.images?.[0]?.url,
+      design: item.design?._id || item.design || null,
+      designThumbnail: item.design?.thumbnail,
     }));
 
     const order = await Order.create({

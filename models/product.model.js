@@ -63,6 +63,10 @@ const ProductSchema = mongoose.Schema(
     ratingsCount: { type: Number, default: 0 },
 
     isActive: { type: Boolean, default: true },
+
+    // If true, the product must be personalised in the editor and a saved
+    // design attached before it can be added to the cart / ordered.
+    customizable: { type: Boolean, default: false },
   },
   {
     timestamps: true,

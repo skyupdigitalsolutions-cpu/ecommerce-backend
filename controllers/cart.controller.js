@@ -1,13 +1,15 @@
 const Cart = require("../models/cart.model");
 const Product = require("../models/product.model");
 const Coupon = require("../models/coupon.model");
+const Design = require("../models/design.model");
 const { computeTotals } = require("../utils/pricing");
 
 // Fetch the user's cart with product + coupon details populated, creating an
 // empty cart the first time. Used by every handler below.
 const getPopulatedCart = async (userId) => {
   let cart = await Cart.findOne({ user: userId })
-    .populate("items.product", "name price discount images stock")
+    .populate("items.product", "name price discount images stock customizable")
+    .populate("items.design", "name thumbnail")
     .populate("coupon");
   if (!cart) {
     cart = await Cart.create({ user: userId, items: [] });
@@ -32,10 +34,10 @@ const getCart = async (req, res) => {
   }
 };
 
-// POST /api/cart  (protected)  body: { productId, quantity }
+// POST /api/cart  (protected)  body: { productId, quantity, designId? }
 const addToCart = async (req, res) => {
   try {
-    const { productId, quantity = 1 } = req.body;
+    const { productId, quantity = 1, designId } = req.body;
 
     const product = await Product.findById(productId);
     if (!product) {
@@ -45,15 +47,39 @@ const addToCart = async (req, res) => {
       return res.status(400).json({ message: "Not enough stock" });
     }
 
+    // Customizable products can't be ordered without a design.
+    if (product.customizable && !designId) {
+      return res
+        .status(400)
+        .json({ message: "This product needs a design. Customize it first." });
+    }
+
+    // If a design was supplied, it must exist and belong to this user.
+    if (designId) {
+      const design = await Design.findById(designId);
+      if (!design) {
+        return res.status(404).json({ message: "Design not found" });
+      }
+      if (design.user.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: "Not authorized to use this design" });
+      }
+    }
+
     let cart = await Cart.findOne({ user: req.user._id });
     if (!cart) cart = await Cart.create({ user: req.user._id, items: [] });
 
-    // If the product is already in the cart, bump its quantity.
+    // One line per product; bump quantity if already present. If a design is
+    // supplied it becomes/updates the design on that line.
     const line = cart.items.find((i) => i.product.toString() === productId);
     if (line) {
       line.quantity += Number(quantity);
+      if (designId) line.design = designId;
     } else {
-      cart.items.push({ product: productId, quantity: Number(quantity) });
+      cart.items.push({
+        product: productId,
+        quantity: Number(quantity),
+        design: designId || null,
+      });
     }
     await cart.save();
 

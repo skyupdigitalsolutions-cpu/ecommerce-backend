@@ -14,6 +14,10 @@ const OrderItemSchema = mongoose.Schema(
     price: { type: Number, required: true },
     quantity: { type: Number, required: true, min: 1 },
     image: { type: String },
+
+    // Snapshot of the attached design (if any) at time of ordering.
+    design: { type: mongoose.Schema.Types.ObjectId, ref: "Design", default: null },
+    designThumbnail: { type: String },
   },
   { _id: false }
 );

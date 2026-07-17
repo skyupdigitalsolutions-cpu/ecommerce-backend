@@ -14,6 +14,13 @@ const CartItemSchema = mongoose.Schema(
       default: 1,
       min: 1,
     },
+
+    // Optional design attached to this line (required for customizable products).
+    design: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Design",
+      default: null,
+    },
   },
   { _id: false }
 );
