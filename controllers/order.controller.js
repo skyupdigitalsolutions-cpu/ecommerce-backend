@@ -5,6 +5,28 @@ const Coupon = require("../models/coupon.model");
 const { computeTotals, sellingPrice } = require("../utils/pricing");
 const { ROLES, ORDER_STATUS, PAYMENT_STATUS } = require("../constants");
 
+// Applies the one-time side effects of a placed order: decrement stock, count
+// the coupon, and empty the buyer's cart. Called immediately for COD, but only
+// AFTER payment is verified for online orders (so a cancelled payment doesn't
+// wipe the cart or hold stock). Safe to guard against double-calls by the
+// caller (only run on the pending -> paid transition).
+const finalizeOrder = async (order) => {
+  await Promise.all(
+    order.items.map((it) =>
+      Product.findByIdAndUpdate(it.product, { $inc: { stock: -it.quantity } })
+    )
+  );
+  if (order.coupon) {
+    await Coupon.findByIdAndUpdate(order.coupon, { $inc: { usedCount: 1 } });
+  }
+  const cart = await Cart.findOne({ user: order.user });
+  if (cart) {
+    cart.items = [];
+    cart.coupon = null;
+    await cart.save();
+  }
+};
+
 // POST /api/orders  (protected)
 // Turns the user's current cart into an order. All prices are recomputed on
 // the server so the client can never dictate what it pays.
@@ -62,22 +84,11 @@ const createOrder = async (req, res) => {
       ...totals,
     });
 
-    // Decrement stock for each product.
-    await Promise.all(
-      items.map((item) =>
-        Product.findByIdAndUpdate(item.product._id, {
-          $inc: { stock: -item.quantity },
-        })
-      )
-    );
-
-    // Count the coupon usage, then empty the cart.
-    if (cart.coupon) {
-      await Coupon.findByIdAndUpdate(cart.coupon._id, { $inc: { usedCount: 1 } });
+    // COD is placed immediately. For online payment we keep the cart and stock
+    // intact until the payment is verified (payment.controller calls finalize).
+    if (paymentMethod === "cod") {
+      await finalizeOrder(order);
     }
-    cart.items = [];
-    cart.coupon = null;
-    await cart.save();
 
     res.status(201).json(order);
   } catch (error) {
@@ -173,14 +184,19 @@ const cancelOrder = async (req, res) => {
     order.orderStatus = ORDER_STATUS.CANCELLED;
     await order.save();
 
-    // Put the stock back.
-    await Promise.all(
-      order.items.map((item) =>
-        Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: item.quantity },
-        })
-      )
-    );
+    // Only put stock back if it was ever taken. COD and paid online orders were
+    // finalized (stock decremented); an unpaid online order never took stock.
+    const stockWasTaken =
+      order.paymentMethod === "cod" || order.paymentStatus === PAYMENT_STATUS.PAID;
+    if (stockWasTaken) {
+      await Promise.all(
+        order.items.map((item) =>
+          Product.findByIdAndUpdate(item.product, {
+            $inc: { stock: item.quantity },
+          })
+        )
+      );
+    }
 
     res.status(200).json(order);
   } catch (error) {
@@ -195,4 +211,5 @@ module.exports = {
   getAllOrders,
   updateOrderStatus,
   cancelOrder,
+  finalizeOrder,
 };

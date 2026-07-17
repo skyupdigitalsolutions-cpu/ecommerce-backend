@@ -3,6 +3,7 @@ const Order = require("../models/order.model");
 const env = require("../config/env");
 const { getRazorpay } = require("../config/razorpay");
 const { PAYMENT_STATUS, ORDER_STATUS } = require("../constants");
+const { finalizeOrder } = require("./order.controller");
 
 // Constant-time string compare, so signature checks don't leak timing info.
 const safeEqual = (a, b) => {
@@ -73,6 +74,8 @@ const verifyPayment = async (req, res) => {
       return res.status(403).json({ message: "Not authorized for this order" });
     }
 
+    const wasPaid = order.paymentStatus === PAYMENT_STATUS.PAID;
+
     // Razorpay's rule: signature = HMAC_SHA256(order_id + "|" + payment_id, key_secret)
     const expected = crypto
       .createHmac("sha256", env.razorpay.keySecret)
@@ -91,6 +94,11 @@ const verifyPayment = async (req, res) => {
     order.paymentInfo.razorpayPaymentId = razorpay_payment_id;
     order.paymentInfo.razorpaySignature = razorpay_signature;
     await order.save();
+
+    // Apply stock/coupon/cart side effects once, on the first successful verify.
+    if (!wasPaid) {
+      await finalizeOrder(order);
+    }
 
     res.status(200).json({ message: "Payment verified", order });
   } catch (error) {
@@ -126,12 +134,16 @@ const webhook = async (req, res) => {
 
       if (order) {
         if (event.event === "payment.captured") {
+          const wasPaid = order.paymentStatus === PAYMENT_STATUS.PAID;
           order.paymentStatus = PAYMENT_STATUS.PAID;
           if (order.orderStatus === ORDER_STATUS.PENDING) {
             order.orderStatus = ORDER_STATUS.CONFIRMED;
           }
           order.paymentInfo.razorpayPaymentId = entity.id;
           await order.save();
+          if (!wasPaid) {
+            await finalizeOrder(order);
+          }
         } else if (event.event === "payment.failed") {
           order.paymentStatus = PAYMENT_STATUS.FAILED;
           await order.save();
