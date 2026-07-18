@@ -6,6 +6,7 @@ const {
   login,
   refresh,
   logout,
+  logoutAll,
   getMe,
   updateProfile,
   verifyEmail,
@@ -29,6 +30,7 @@ router.post("/register", authLimiter, registerRules, validate, register);
 router.post("/login", authLimiter, loginRules, validate, login);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
+router.post("/logout-all", protect, logoutAll);
 
 // Email verification: the link in the email hits this GET route.
 router.get("/verify-email/:token", verifyEmail);

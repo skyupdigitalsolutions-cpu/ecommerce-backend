@@ -55,6 +55,11 @@ const UserSchema = mongoose.Schema(
 
     isEmailVerified: { type: Boolean, default: false },
 
+    // Bumped to invalidate all existing refresh tokens for this user
+    // (logout-all, password reset). Refresh tokens carry the version they were
+    // issued at; a mismatch means the token has been revoked.
+    tokenVersion: { type: Number, default: 0 },
+
     addresses: [AddressSchema],
 
     // Used by the forgot/reset-password flow.

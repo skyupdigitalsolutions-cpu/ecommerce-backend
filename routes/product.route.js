@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   getProducts,
   getProduct,
+  getAllProductsAdmin,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -17,6 +18,8 @@ const { ROLES } = require("../constants");
 
 // Public reads (getProducts supports ?keyword=&category=&page=... filters)
 router.get("/", getProducts);
+// Admin: list ALL products including inactive (declared before "/:id").
+router.get("/admin/all", protect, authorize(ROLES.ADMIN), getAllProductsAdmin);
 router.get("/:id", getProduct);
 
 // Admin writes. upload.array parses multipart form-data and fills req.files,

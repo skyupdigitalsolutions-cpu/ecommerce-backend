@@ -10,9 +10,10 @@ const signAccessToken = (userId) => {
 };
 
 // A long-lived refresh token. We store it in an httpOnly cookie and use it
-// at POST /api/auth/refresh to hand out a new access token.
-const signRefreshToken = (userId) => {
-  return jwt.sign({ id: userId }, env.jwt.refreshSecret, {
+// at POST /api/auth/refresh to hand out a new access token. It carries the
+// user's tokenVersion so it can be revoked (see auth.controller refresh).
+const signRefreshToken = (userId, tokenVersion = 0) => {
+  return jwt.sign({ id: userId, tv: tokenVersion }, env.jwt.refreshSecret, {
     expiresIn: env.jwt.refreshExpires,
   });
 };

@@ -2,6 +2,7 @@ const Order = require("../models/order.model");
 const Cart = require("../models/cart.model");
 const Product = require("../models/product.model");
 const Coupon = require("../models/coupon.model");
+const env = require("../config/env");
 const { computeTotals, sellingPrice } = require("../utils/pricing");
 const { ROLES, ORDER_STATUS, PAYMENT_STATUS } = require("../constants");
 const { notifyOrderConfirmation, notifyOrderStatus } = require("../helpers/orderNotifications");
@@ -36,6 +37,13 @@ const finalizeOrder = async (order) => {
 // the server so the client can never dictate what it pays.
 const createOrder = async (req, res) => {
   try {
+    // Optional gate: require a verified email before checkout (env-controlled).
+    if (env.requireVerifiedEmail && !req.user.isEmailVerified) {
+      return res
+        .status(403)
+        .json({ message: "Please verify your email before checking out" });
+    }
+
     const { shippingAddress, paymentMethod = "cod" } = req.body;
     if (!shippingAddress) {
       return res.status(400).json({ message: "Shipping address is required" });
@@ -247,6 +255,38 @@ const updateShipping = async (req, res) => {
   }
 };
 
+// Cancels abandoned online orders: razorpay orders still pending payment and
+// still in the pending state, older than `olderThanMinutes`. These never took
+// stock (that happens only after payment), so no restock is needed. Reusable by
+// the admin endpoint below and by a scheduled job.
+const cancelStalePendingOrders = async (olderThanMinutes = 30) => {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+  const stale = await Order.find({
+    paymentMethod: "razorpay",
+    paymentStatus: PAYMENT_STATUS.PENDING,
+    orderStatus: ORDER_STATUS.PENDING,
+    createdAt: { $lt: cutoff },
+  });
+
+  for (const order of stale) {
+    order.orderStatus = ORDER_STATUS.CANCELLED;
+    order.statusHistory.push({ status: ORDER_STATUS.CANCELLED, note: "Auto-cancelled: payment not completed" });
+    await order.save();
+  }
+  return stale.length;
+};
+
+// POST /api/orders/cleanup-pending?minutes=30  (admin)
+const cleanupPendingOrders = async (req, res) => {
+  try {
+    const minutes = Number(req.query.minutes) || 30;
+    const cancelled = await cancelStalePendingOrders(minutes);
+    res.status(200).json({ cancelled });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getMyOrders,
@@ -256,4 +296,6 @@ module.exports = {
   cancelOrder,
   finalizeOrder,
   updateShipping,
+  cancelStalePendingOrders,
+  cleanupPendingOrders,
 };

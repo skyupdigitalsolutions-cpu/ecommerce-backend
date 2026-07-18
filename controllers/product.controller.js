@@ -135,9 +135,26 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+// GET /api/products/admin/all  (admin) - every product, INCLUDING inactive ones
+// (the public getProducts filters to isActive:true). Supports the same keyword
+// and category filters for convenience.
+const getAllProductsAdmin = async (req, res) => {
+  try {
+    const { keyword, category } = req.query;
+    const filter = {};
+    if (keyword) filter.name = { $regex: keyword, $options: "i" };
+    if (category) filter.category = category;
+    const products = await Product.find(filter).sort({ createdAt: -1 });
+    res.status(200).json(products);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getProducts,
   getProduct,
+  getAllProductsAdmin,
   createProduct,
   updateProduct,
   deleteProduct,

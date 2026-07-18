@@ -9,6 +9,7 @@ const {
   updateOrderStatus,
   cancelOrder,
   updateShipping,
+  cleanupPendingOrders,
 } = require("../controllers/order.controller");
 
 const { protect, authorize } = require("../middleware/auth.middleware");
@@ -22,6 +23,7 @@ router.post("/", createOrder);
 // "/my" and admin "/" are declared before "/:id" so they are matched first.
 router.get("/my", getMyOrders);
 router.get("/", authorize(ROLES.ADMIN), getAllOrders);
+router.post("/cleanup-pending", authorize(ROLES.ADMIN), cleanupPendingOrders);
 
 router.get("/:id", getOrder);
 router.put("/:id/status", authorize(ROLES.ADMIN), updateOrderStatus);

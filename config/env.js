@@ -31,6 +31,10 @@ const env = {
 
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
 
+  // When "true", checkout requires a verified email. Off by default so it can
+  // be turned on per-environment without changing code.
+  requireVerifiedEmail: process.env.REQUIRE_VERIFIED_EMAIL === "true",
+
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,

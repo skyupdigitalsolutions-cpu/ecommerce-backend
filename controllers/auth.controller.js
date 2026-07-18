@@ -59,7 +59,7 @@ const register = async (req, res) => {
     // The account is usable immediately; isEmailVerified stays false until they
     // click the link. Gate sensitive actions on it later if you want.
     const accessToken = signAccessToken(user._id);
-    const refreshToken = signRefreshToken(user._id);
+    const refreshToken = signRefreshToken(user._id, user.tokenVersion);
     setRefreshCookie(res, refreshToken);
 
     res.status(201).json({ user: publicUser(user), accessToken });
@@ -80,7 +80,7 @@ const login = async (req, res) => {
     }
 
     const accessToken = signAccessToken(user._id);
-    const refreshToken = signRefreshToken(user._id);
+    const refreshToken = signRefreshToken(user._id, user.tokenVersion);
     setRefreshCookie(res, refreshToken);
 
     res.status(200).json({ user: publicUser(user), accessToken });
@@ -98,6 +98,18 @@ const refresh = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, env.jwt.refreshSecret);
+
+    // Revocation check: the token's version must match the user's current
+    // tokenVersion. Older tokens (signed before this feature) have no `tv`,
+    // which we treat as 0.
+    const user = await User.findById(decoded.id).select("tokenVersion");
+    if (!user) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+    if ((decoded.tv ?? 0) !== user.tokenVersion) {
+      return res.status(401).json({ message: "Refresh token has been revoked" });
+    }
+
     const accessToken = signAccessToken(decoded.id);
 
     res.status(200).json({ accessToken });
@@ -111,6 +123,19 @@ const logout = async (req, res) => {
   try {
     clearRefreshCookie(res);
     res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Revoke every refresh token for the current user (e.g. "log out of all
+// devices") by bumping their tokenVersion. Any previously issued refresh token
+// will then fail the version check at /refresh.
+const logoutAll = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, { $inc: { tokenVersion: 1 } });
+    clearRefreshCookie(res);
+    res.status(200).json({ message: "Logged out of all devices" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -244,6 +269,7 @@ const resetPassword = async (req, res) => {
     user.password = req.body.password; // re-hashed by the pre-save hook
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
+    user.tokenVersion = (user.tokenVersion || 0) + 1; // revoke existing sessions
     await user.save();
 
     res.status(200).json({ message: "Password reset successfully" });
@@ -257,6 +283,7 @@ module.exports = {
   login,
   refresh,
   logout,
+  logoutAll,
   getMe,
   updateProfile,
   verifyEmail,
