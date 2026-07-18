@@ -36,8 +36,11 @@ app.use(cookieParser()); // read the refresh-token cookie
 app.use(compression()); // gzip responses
 app.use(sanitize); // strip $ / . from body keys (Express-5-safe)
 
-// Request logging in development only.
-if (env.nodeEnv !== "production") {
+// Request logging: pretty console in dev, piped to winston log files in prod.
+const logger = require("./config/logger");
+if (env.nodeEnv === "production") {
+  app.use(morgan("combined", { stream: logger.stream }));
+} else {
   app.use(morgan("dev"));
 }
 

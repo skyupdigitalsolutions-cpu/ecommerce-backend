@@ -1,7 +1,9 @@
+const PDFDocument = require("pdfkit");
 const Order = require("../models/order.model");
 const Cart = require("../models/cart.model");
 const Product = require("../models/product.model");
 const Coupon = require("../models/coupon.model");
+const User = require("../models/user.model");
 const env = require("../config/env");
 const { computeTotals, sellingPrice } = require("../utils/pricing");
 const { ROLES, ORDER_STATUS, PAYMENT_STATUS } = require("../constants");
@@ -287,6 +289,98 @@ const cleanupPendingOrders = async (req, res) => {
   }
 };
 
+// GET /api/orders/:id/invoice  (owner or admin) - a downloadable PDF invoice.
+const generateInvoice = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const isOwner = order.user.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === ROLES.ADMIN;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const user = await User.findById(order.user).select("name email");
+    const short = order._id.toString().slice(-8).toUpperCase();
+    const money = (n) => `INR ${Number(n || 0).toFixed(2)}`;
+
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const chunks = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => {
+      const pdf = Buffer.concat(chunks);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="invoice-${short}.pdf"`);
+      res.status(200).send(pdf);
+    });
+
+    // Header
+    doc.fontSize(20).text("Your Print Store", 50, 50);
+    doc.fontSize(9).fillColor("#666").text("support@yourstore.com").fillColor("#000");
+    doc.fontSize(18).text("INVOICE", 50, 50, { align: "right" });
+    doc.fontSize(10).text(`Invoice #: ${short}`, { align: "right" });
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, { align: "right" });
+    doc.moveDown(2);
+
+    // Bill to
+    const a = order.shippingAddress || {};
+    doc.fontSize(12).text("Bill To:", 50, doc.y);
+    doc.fontSize(10);
+    doc.text(user?.name || "Customer");
+    if (user?.email) doc.text(user.email);
+    doc.text([a.line1, a.line2].filter(Boolean).join(", "));
+    doc.text([a.city, a.state, a.postalCode].filter(Boolean).join(", "));
+    if (a.country) doc.text(a.country);
+    if (a.phone) doc.text(`Phone: ${a.phone}`);
+    doc.moveDown();
+    doc.text(`Payment: ${(order.paymentMethod || "").toUpperCase()} - ${order.paymentStatus}`);
+    doc.text(`Order status: ${order.orderStatus}`);
+    doc.moveDown();
+
+    // Items table
+    let y = doc.y + 10;
+    doc.fontSize(10).font("Helvetica-Bold");
+    doc.text("Item", 50, y);
+    doc.text("Qty", 300, y, { width: 50, align: "right" });
+    doc.text("Price", 360, y, { width: 80, align: "right" });
+    doc.text("Subtotal", 450, y, { width: 90, align: "right" });
+    doc.font("Helvetica");
+    doc.moveTo(50, y + 15).lineTo(540, y + 15).stroke();
+    y += 25;
+
+    (order.items || []).forEach((it) => {
+      doc.text(it.name, 50, y, { width: 240 });
+      doc.text(String(it.quantity), 300, y, { width: 50, align: "right" });
+      doc.text(money(it.price), 360, y, { width: 80, align: "right" });
+      doc.text(money(it.price * it.quantity), 450, y, { width: 90, align: "right" });
+      y += 20;
+    });
+    doc.moveTo(50, y).lineTo(540, y).stroke();
+    y += 12;
+
+    const totalLine = (label, val, bold) => {
+      doc.font(bold ? "Helvetica-Bold" : "Helvetica");
+      doc.text(label, 360, y, { width: 80, align: "right" });
+      doc.text(val, 450, y, { width: 90, align: "right" });
+      y += 18;
+    };
+    totalLine("Items:", money(order.itemsPrice));
+    if (order.discountPrice) totalLine("Discount:", `- ${money(order.discountPrice)}`);
+    if (order.taxPrice) totalLine("Tax:", money(order.taxPrice));
+    totalLine("Shipping:", money(order.shippingPrice));
+    totalLine("Total:", money(order.totalPrice), true);
+    doc.font("Helvetica");
+
+    doc.moveDown(4);
+    doc.fontSize(9).fillColor("#888").text("Thank you for your business!", 50, doc.y + 20, { align: "center", width: 490 });
+
+    doc.end();
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getMyOrders,
@@ -298,4 +392,5 @@ module.exports = {
   updateShipping,
   cancelStalePendingOrders,
   cleanupPendingOrders,
+  generateInvoice,
 };

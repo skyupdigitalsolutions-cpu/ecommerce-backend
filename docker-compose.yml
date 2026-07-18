@@ -1,0 +1,19 @@
+# Runs the backend using the values in your .env (Mongo Atlas, Razorpay, etc.).
+# A Redis service is included (commented) for when you add caching / BullMQ.
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    restart: unless-stopped
+    # depends_on:
+    #   - redis
+
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped

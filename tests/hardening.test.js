@@ -86,7 +86,7 @@ const main = async () => {
   r = await api("POST", "/orders", { token: buyerToken, body: { shippingAddress: { line1: "1 St", city: "Pune", state: "MH", postalCode: "411001" }, paymentMethod: "razorpay" } });
   const staleOrderId = r.data._id; created.orders.push(staleOrderId);
   // age it 60 minutes into the past
-  await Order.findByIdAndUpdate(staleOrderId, { createdAt: new Date(Date.now() - 60 * 60 * 1000) });
+  await mongoose.connection.collection("orders").updateOne({ _id: new mongoose.Types.ObjectId(staleOrderId) }, { $set: { createdAt: new Date(Date.now() - 60*60*1000) } });
 
   // a second, fresh pending order that should survive cleanup
   await api("POST", "/cart", { token: buyerToken, body: { productId, quantity: 1 } });

@@ -10,6 +10,7 @@ const {
   cancelOrder,
   updateShipping,
   cleanupPendingOrders,
+  generateInvoice,
 } = require("../controllers/order.controller");
 
 const { protect, authorize } = require("../middleware/auth.middleware");
@@ -26,6 +27,7 @@ router.get("/", authorize(ROLES.ADMIN), getAllOrders);
 router.post("/cleanup-pending", authorize(ROLES.ADMIN), cleanupPendingOrders);
 
 router.get("/:id", getOrder);
+router.get("/:id/invoice", generateInvoice);
 router.put("/:id/status", authorize(ROLES.ADMIN), updateOrderStatus);
 router.put("/:id/shipping", authorize(ROLES.ADMIN), updateShipping);
 router.put("/:id/cancel", cancelOrder);

@@ -1,3 +1,5 @@
+const logger = require("../config/logger");
+
 // notFound: reached when no route matched. Forwards a 404 to the error handler.
 const notFound = (req, res, next) => {
   res.status(404);
@@ -30,6 +32,13 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 409;
     const field = Object.keys(err.keyValue)[0];
     message = `${field} already exists`;
+  }
+
+  // Log server-side (5xx) errors with stack; client errors (4xx) as warnings.
+  if (statusCode >= 500) {
+    logger.error(`${statusCode} ${req.method} ${req.originalUrl} - ${message}`, { stack: err.stack });
+  } else {
+    logger.warn(`${statusCode} ${req.method} ${req.originalUrl} - ${message}`);
   }
 
   res.status(statusCode).json({
