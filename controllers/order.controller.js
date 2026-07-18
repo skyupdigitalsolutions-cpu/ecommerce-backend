@@ -4,6 +4,7 @@ const Product = require("../models/product.model");
 const Coupon = require("../models/coupon.model");
 const { computeTotals, sellingPrice } = require("../utils/pricing");
 const { ROLES, ORDER_STATUS, PAYMENT_STATUS } = require("../constants");
+const { notifyOrderConfirmation, notifyOrderStatus } = require("../helpers/orderNotifications");
 
 // Applies the one-time side effects of a placed order: decrement stock, count
 // the coupon, and empty the buyer's cart. Called immediately for COD, but only
@@ -25,6 +26,9 @@ const finalizeOrder = async (order) => {
     cart.coupon = null;
     await cart.save();
   }
+
+  // Fire-and-forget: email the buyer that we've received their order.
+  notifyOrderConfirmation(order);
 };
 
 // POST /api/orders  (protected)
@@ -156,6 +160,9 @@ const updateOrderStatus = async (req, res) => {
       if (order.paymentMethod === "cod") order.paymentStatus = PAYMENT_STATUS.PAID;
     }
     await order.save();
+
+    // Fire-and-forget: email the buyer about the new status.
+    notifyOrderStatus(order, status);
 
     res.status(200).json(order);
   } catch (error) {
