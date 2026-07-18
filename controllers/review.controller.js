@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const Review = require("../models/review.model");
 const Product = require("../models/product.model");
-const { ROLES } = require("../constants");
+const Order = require("../models/order.model");
+const { ROLES, PAYMENT_STATUS, ORDER_STATUS } = require("../constants");
 
 // Recompute a product's ratingsAverage + ratingsCount from its reviews.
 // Called after any create / update / delete so the product stays in sync.
@@ -56,6 +57,22 @@ const createReview = async (req, res) => {
     const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
+    }
+
+    // Verified-purchase gate: the user must have an order containing this
+    // product that is either paid (online) or delivered (covers COD).
+    const purchased = await Order.exists({
+      user: req.user._id,
+      "items.product": productId,
+      $or: [
+        { paymentStatus: PAYMENT_STATUS.PAID },
+        { orderStatus: ORDER_STATUS.DELIVERED },
+      ],
+    });
+    if (!purchased) {
+      return res
+        .status(403)
+        .json({ message: "You can only review products you have purchased" });
     }
 
     const existing = await Review.findOne({ user: req.user._id, product: productId });

@@ -35,7 +35,7 @@ const productRating = async (token, productId) => {
 
 const stamp = Date.now();
 const password = "Passw0rd!";
-const created = { products: [], categories: [], users: [] };
+const created = { products: [], categories: [], users: [], orders: [] };
 
 const main = async () => {
   console.log(`\nTesting reviews at ${API}\n${"=".repeat(50)}`);
@@ -57,6 +57,20 @@ const main = async () => {
   r = await api("POST", "/products", { token: adminToken, body: { name: `RevProd ${stamp}`, category: categoryId, price: 200, stock: 20 } });
   const productId = r.data._id; created.products.push(productId);
 
+  // Reviews now require a verified purchase, so give each reviewer a delivered
+  // order for this product (COD order -> admin marks delivered).
+  const purchase = async (token) => {
+    await api("POST", "/cart", { token, body: { productId, quantity: 1 } });
+    const o = await api("POST", "/orders", {
+      token,
+      body: { shippingAddress: { line1: "1 St", city: "Pune", state: "MH", postalCode: "411001" }, paymentMethod: "cod" },
+    });
+    await api("PUT", `/orders/${o.data._id}/status`, { token: adminToken, body: { status: "delivered" } });
+    created.orders.push(o.data._id);
+  };
+  await purchase(t1);
+  await purchase(t2);
+
   // create review (user1, rating 4)
   r = await api("POST", "/reviews", { token: t1, body: { productId, rating: 4, comment: "Nice" } });
   const review1Id = r.data._id;
@@ -71,6 +85,12 @@ const main = async () => {
   // invalid rating -> 400
   r = await api("POST", "/reviews", { token: t2, body: { productId, rating: 6 } });
   check("rating out of range -> 400", r.status === 400, `status ${r.status}`);
+
+  // a user who hasn't bought the product cannot review it
+  r = await api("POST", "/auth/register", { body: { name: "Rev3", email: `rv3_${stamp}@test.com`, password } });
+  const t3 = r.data.accessToken; created.users.push(r.data.user._id);
+  r = await api("POST", "/reviews", { token: t3, body: { productId, rating: 5 } });
+  check("non-purchaser review -> 403", r.status === 403, `status ${r.status}`);
 
   // second user reviews (rating 2) -> avg 3.0, count 2
   r = await api("POST", "/reviews", { token: t2, body: { productId, rating: 2, comment: "Meh" } });
@@ -120,6 +140,8 @@ const main = async () => {
   await Promise.all([
     User.deleteMany({ _id: { $in: created.users.map(oid) } }),
     mongoose.connection.collection("reviews").deleteMany({ product: oid(productId) }),
+    mongoose.connection.collection("orders").deleteMany({ _id: { $in: created.orders.map(oid) } }),
+    mongoose.connection.collection("carts").deleteMany({ user: { $in: created.users.map(oid) } }),
     mongoose.connection.collection("products").deleteMany({ _id: { $in: created.products.map(oid) } }),
     mongoose.connection.collection("categories").deleteMany({ _id: { $in: created.categories.map(oid) } }),
   ]);
