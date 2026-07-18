@@ -15,5 +15,6 @@ router.use("/wishlist", require("./wishlist.route"));
 router.use("/payments", require("./payment.route"));
 router.use("/designs", require("./design.route"));
 router.use("/reviews", require("./review.route"));
+router.use("/admin/analytics", require("./analytics.route"));
 
 module.exports = router;
