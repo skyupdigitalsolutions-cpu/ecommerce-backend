@@ -7,6 +7,7 @@ const {
   createDesign,
   updateDesign,
   deleteDesign,
+  exportDesignPdf,
 } = require("../controllers/design.controller");
 
 const { protect } = require("../middleware/auth.middleware");
@@ -19,5 +20,6 @@ router.post("/", createDesign);
 router.get("/:id", getDesign);
 router.put("/:id", updateDesign);
 router.delete("/:id", deleteDesign);
+router.post("/:id/pdf", exportDesignPdf);
 
 module.exports = router;
