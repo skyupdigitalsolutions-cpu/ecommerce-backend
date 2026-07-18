@@ -1,5 +1,6 @@
 const sendEmail = require("./sendEmail");
 const User = require("../models/user.model");
+const { emitToUser } = require("../sockets");
 const {
   orderConfirmationTemplate,
   orderStatusTemplate,
@@ -10,6 +11,13 @@ const {
 // catches and logs its own errors.
 
 const notifyOrderConfirmation = async (order) => {
+  // Real-time push (in-app) — independent of the email below.
+  emitToUser(order.user, "order:update", {
+    orderId: order._id,
+    orderStatus: order.orderStatus,
+    type: "confirmation",
+    message: "We've received your order",
+  });
   try {
     const user = await User.findById(order.user).select("name email");
     if (!user?.email) return;
@@ -24,6 +32,12 @@ const notifyOrderConfirmation = async (order) => {
 };
 
 const notifyOrderStatus = async (order, status) => {
+  emitToUser(order.user, "order:update", {
+    orderId: order._id,
+    orderStatus: status,
+    type: "status",
+    message: `Your order is now ${status}`,
+  });
   try {
     const user = await User.findById(order.user).select("name email");
     if (!user?.email) return;

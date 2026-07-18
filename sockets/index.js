@@ -43,4 +43,15 @@ const getIO = () => {
   return io;
 };
 
-module.exports = { initSocket, getIO };
+// Safely emit an event to a single user's room. Never throws (sockets may not
+// be initialized in some contexts), so callers can fire-and-forget.
+const emitToUser = (userId, event, payload) => {
+  try {
+    if (!io) return;
+    io.to(String(userId)).emit(event, payload);
+  } catch (err) {
+    console.error("[socket] emit failed:", err.message);
+  }
+};
+
+module.exports = { initSocket, getIO, emitToUser };
