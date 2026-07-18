@@ -84,6 +84,16 @@ const OrderSchema = mongoose.Schema(
     trackingId: { type: String },
     courier: { type: String },
     deliveredAt: { type: Date },
+
+    // Timeline of status changes, newest pushed last. Powers a delivery
+    // progress view on the order.
+    statusHistory: [
+      {
+        status: { type: String },
+        note: { type: String },
+        at: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,

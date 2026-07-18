@@ -85,6 +85,7 @@ const createOrder = async (req, res) => {
       shippingAddress,
       coupon: cart.coupon ? cart.coupon._id : null,
       paymentMethod,
+      statusHistory: [{ status: ORDER_STATUS.PENDING, note: "Order placed" }],
       ...totals,
     });
 
@@ -155,6 +156,7 @@ const updateOrderStatus = async (req, res) => {
     }
 
     order.orderStatus = status;
+    order.statusHistory.push({ status });
     if (status === ORDER_STATUS.DELIVERED) {
       order.deliveredAt = new Date();
       if (order.paymentMethod === "cod") order.paymentStatus = PAYMENT_STATUS.PAID;
@@ -211,6 +213,40 @@ const cancelOrder = async (req, res) => {
   }
 };
 
+// PUT /api/orders/:id/shipping  (admin)  body: { courier, trackingId }
+// Attaches courier + tracking and marks the order shipped (unless it's already
+// delivered/cancelled/returned), recording it in the timeline.
+const updateShipping = async (req, res) => {
+  try {
+    const { courier, trackingId } = req.body;
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (courier !== undefined) order.courier = courier;
+    if (trackingId !== undefined) order.trackingId = trackingId;
+
+    const locked = [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED, ORDER_STATUS.RETURNED];
+    if (!locked.includes(order.orderStatus)) {
+      order.orderStatus = ORDER_STATUS.SHIPPED;
+      order.statusHistory.push({
+        status: ORDER_STATUS.SHIPPED,
+        note: courier
+          ? `Shipped via ${courier}${trackingId ? ` (${trackingId})` : ""}`
+          : "Shipped",
+      });
+    }
+    await order.save();
+
+    notifyOrderStatus(order, order.orderStatus);
+
+    res.status(200).json(order);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getMyOrders,
@@ -219,4 +255,5 @@ module.exports = {
   updateOrderStatus,
   cancelOrder,
   finalizeOrder,
+  updateShipping,
 };
