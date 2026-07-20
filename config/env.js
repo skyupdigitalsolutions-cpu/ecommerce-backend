@@ -10,6 +10,17 @@ const env = {
 
   mongoUri: process.env.MONGO_URI || "mongodb://localhost:27017/ecommerce",
 
+  // Browser origins allowed to call this API (CORS). Comma-separated list, or
+  // "*" to allow ANY origin (useful for a public product API / when the
+  // frontend is hosted elsewhere, e.g. on a different domain). Non-browser
+  // callers (curl, Postman, server-to-server) are always allowed.
+  //   CORS_ORIGINS=https://my-frontend.com,https://admin.my-frontend.com
+  //   CORS_ORIGINS=*
+  corsOrigins: (process.env.CORS_ORIGINS || process.env.CLIENT_URL || "http://localhost:5173")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     accessExpires: process.env.JWT_ACCESS_EXPIRES || "15m",

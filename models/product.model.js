@@ -42,6 +42,11 @@ const ProductSchema = mongoose.Schema(
     colorOptions: [{ type: String }],
     dimensions: { type: String }, // e.g. "90mm x 55mm"
 
+    // Optional subcategory label (e.g. "Matte", "Letterheads"). Used by the
+    // storefront's on-page filter chips. Matches an item within the parent
+    // category. Free-form string so it stays flexible.
+    subcategory: { type: String },
+
     // Cloudinary images: we store both the URL and the publicId so we can
     // delete them from Cloudinary later.
     images: [

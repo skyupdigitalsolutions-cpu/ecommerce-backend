@@ -15,12 +15,22 @@ const app = express();
 
 // ---- Core middleware (runs on every request) ----
 app.use(helmet()); // sensible security headers
-app.use(
-  cors({
-    origin: env.clientUrl, // allow the React frontend
-    credentials: true, // allow the refresh-token cookie
-  })
-);
+// ---- CORS ----
+// Allow the configured browser origin(s) to call the API. Set CORS_ORIGINS in
+// the environment (comma-separated, or "*" for any origin) so the deployed
+// backend on Render can be reached by a frontend hosted on another domain.
+// Requests with no Origin header (curl, Postman, server-to-server) are allowed.
+const allowedOrigins = env.corsOrigins;
+const corsOptions = allowedOrigins.includes("*")
+  ? { origin: true, credentials: true } // reflect any origin
+  : {
+      origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        return cb(new Error(`Not allowed by CORS: ${origin}`));
+      },
+      credentials: true,
+    };
+app.use(cors(corsOptions));
 // The `verify` callback stashes the raw request bytes on req.rawBody. The
 // Razorpay webhook needs the EXACT bytes (not the re-stringified JSON) to
 // validate its signature. Harmless for every other route.

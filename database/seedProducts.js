@@ -39,6 +39,7 @@ function toProductDoc(p, categoryId) {
     slug: slugify(p.title || p.name),
     description: p.subtitle || "",
     category: categoryId,
+    subcategory: p.type || undefined,
     price: Number(p.priceValue ?? 0),
     discount: Number(p.discountPercent ?? 0),
     // JSON stores image URLs as strings; the schema wants { url, publicId }.

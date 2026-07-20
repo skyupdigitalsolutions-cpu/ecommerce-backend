@@ -18,8 +18,12 @@ const getProducts = async (req, res) => {
     }
 
     const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 12;
-    const skip = (page - 1) * limit;
+    // limit=all (or 0) returns EVERY matching product; otherwise default 12.
+    const limit =
+      req.query.limit === "all" || req.query.limit === "0"
+        ? 0
+        : Number(req.query.limit) || 12;
+    const skip = limit ? (page - 1) * limit : 0;
 
     // Whitelist a few sort options; default to newest first.
     const sortMap = {
@@ -41,7 +45,7 @@ const getProducts = async (req, res) => {
     res.status(200).json({
       products,
       page,
-      pages: Math.ceil(total / limit),
+      pages: limit ? Math.ceil(total / limit) : 1,
       total,
     });
   } catch (error) {
