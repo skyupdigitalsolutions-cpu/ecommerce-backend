@@ -8,6 +8,8 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductCategories,
+  getProductsByCategory,
 } = require("../controllers/product.controller");
 
 const { protect, authorize } = require("../middleware/auth.middleware");
@@ -18,6 +20,10 @@ const { ROLES } = require("../constants");
 
 // Public reads (getProducts supports ?keyword=&category=&page=... filters)
 router.get("/", getProducts);
+// FakeStore-style helpers. MUST come before "/:id" so "categories" / "category"
+// are not treated as an :id and cause a CastError.
+router.get("/categories", getProductCategories);
+router.get("/category/:category", getProductsByCategory);
 // Admin: list ALL products including inactive (declared before "/:id").
 router.get("/admin/all", protect, authorize(ROLES.ADMIN), getAllProductsAdmin);
 router.get("/:id", getProduct);

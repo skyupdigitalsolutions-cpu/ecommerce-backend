@@ -151,6 +151,66 @@ const getAllProductsAdmin = async (req, res) => {
   }
 };
 
+// ---- FakeStore-style convenience endpoints -------------------------------
+// FakeStore exposes GET /products/categories (list of category names) and
+// GET /products/category/:name (products in one category). We mirror that.
+const Category = require("../models/category.model");
+
+// GET /api/products/categories  - public
+// Returns the list of TOP-LEVEL category names, like FakeStore's string array.
+// Pass ?withMeta=true to get [{ _id, name, slug }] objects instead.
+const getProductCategories = async (req, res) => {
+  try {
+    const cats = await Category.find({ parent: null, isActive: true })
+      .select("name slug")
+      .sort({ name: 1 });
+    if (req.query.withMeta === "true") return res.status(200).json(cats);
+    res.status(200).json(cats.map((c) => c.name));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET /api/products/category/:category  - public
+// :category can be a category slug OR name (case-insensitive), e.g.
+//   /api/products/category/visiting-cards
+//   /api/products/category/Visiting%20Cards
+// Returns a plain array of products (FakeStore-style). Supports ?limit= &sort=.
+const getProductsByCategory = async (req, res) => {
+  try {
+    const raw = req.params.category;
+    const category = await Category.findOne({
+      $or: [
+        { slug: raw.toLowerCase() },
+        { name: new RegExp(`^${raw.replace(/[-\s]+/g, "[-\\s]+")}$`, "i") },
+      ],
+    });
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const sortMap = {
+      price_asc: { price: 1 },
+      price_desc: { price: -1 },
+      newest: { createdAt: -1 },
+    };
+    const sortBy = sortMap[req.query.sort] || { createdAt: -1 };
+    const limit = Number(req.query.limit) || 0; // 0 = no limit (FakeStore-like)
+
+    const products = await Product.find({
+      category: category._id,
+      isActive: true,
+    })
+      .populate("category", "name slug")
+      .sort(sortBy)
+      .limit(limit);
+
+    res.status(200).json(products);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getProducts,
   getProduct,
@@ -158,4 +218,6 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductCategories,
+  getProductsByCategory,
 };
